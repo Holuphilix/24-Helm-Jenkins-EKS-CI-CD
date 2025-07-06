@@ -1,0 +1,32 @@
+*.tgz
+.helm/
+.helmignore
+.kube/
+*.log
+# OS-generated files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+secrets.yaml
+*.secret.yaml
+.env
+*.env.*
+node_modules/
+venv/
+__pycache__/
+*.bak
+*.tmp
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.lock.hcl

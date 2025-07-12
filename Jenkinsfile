@@ -19,16 +19,16 @@ pipeline {
                     passwordVariable: 'DOCKER_PASSWORD'
                 )]) {
                     sh '''
-                        echo "Building Docker image..."
-                        docker build -t $DOCKERHUB_IMAGE .
-
-                        echo "Logging in to Docker Hub..."
+                        echo "🔐 Logging in to Docker Hub..."
                         echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
 
-                        echo "Pushing image to Docker Hub..."
+                        echo "🔧 Building Docker image..."
+                        docker build -t $DOCKERHUB_IMAGE .
+
+                        echo "📤 Pushing image to Docker Hub..."
                         docker push $DOCKERHUB_IMAGE
 
-                        echo "Cleaning up local image..."
+                        echo "🧹 Cleaning up local image..."
                         docker rmi $DOCKERHUB_IMAGE || true
                     '''
                 }
@@ -52,14 +52,23 @@ pipeline {
                         export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
                         export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
 
-                        echo "Configuring access to EKS..."
+                        echo "⚙️ Configuring access to EKS..."
                         aws eks --region ${AWS_DEFAULT_REGION} update-kubeconfig --name my-eks-cluster
 
-                        echo "Deploying to EKS with Helm..."
+                        echo "🚀 Deploying to EKS with Helm..."
                         helm upgrade --install my-webapp ./webapp --namespace default
                     '''
                 }
             }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Deployment succeeded!'
+        }
+        failure {
+            echo '❌ Deployment failed. Please check logs above.'
         }
     }
 }

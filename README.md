@@ -367,6 +367,7 @@ module "ec2_jenkins" {
   subnet_id      = module.vpc.public_subnet_az1
 }
 ```
+
 ### Step 6: Terraform workflow
 
 From your project root:
@@ -419,6 +420,7 @@ resource "aws_eks_node_group" "eks_nodes" {
   ]
 }
 ```
+
 ### ✅ Step 2: Create `terraform/eks/variables.tf`
 
 ```hcl
@@ -563,7 +565,134 @@ terraform plan -out eks-plan
 terraform apply eks-plan
 ```
 
-## 🔧 **Task 6: Connect kubectl to EKS Cluster and Verify Access**
+## 📘**Task 7: IAM Role Module for Jenkins EC2**
+
+This task focuses on creating a modular and reusable **IAM Role configuration** using Terraform. The role is designed specifically for a **Jenkins EC2 instance** that will interact with AWS services like EKS, ECR, and SSM.
+
+### 📁 Folder Structure
+
+The IAM configuration is structured within its own folder under the `terraform/` directory for clarity and modularity. It includes:
+
+* `main.tf`: Defines the IAM role, policies, and instance profile.
+* `variables.tf`: Manages input variables (e.g., role name).
+* `outputs.tf`: Exposes outputs for use in other modules or root configuration.
+
+### 🛠️ Functionality
+
+* Grants the EC2 instance permissions for:
+
+  * Managing EKS clusters and worker nodes.
+  * Accessing Amazon ECR for container images.
+  * Using AWS Systems Manager (SSM) for remote access.
+* Attaches the IAM role to an instance profile for EC2 use.
+
+
+### ✅ Folder Structure
+
+```
+terraform/
+├── iam/
+│   ├── main.tf
+│   ├── variables.tf
+│   └── outputs.tf
+├── main.tf
+├── variables.tf
+└── outputs.tf
+```
+
+### ✅ `terraform/iam/main.tf`
+
+```hcl
+resource "aws_iam_role" "jenkins_role" {
+  name = var.role_name
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      },
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "eks_cluster" {
+  role       = aws_iam_role.jenkins_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+}
+
+resource "aws_iam_role_policy_attachment" "eks_worker" {
+  role       = aws_iam_role.jenkins_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+}
+
+resource "aws_iam_role_policy_attachment" "ecr_access" {
+  role       = aws_iam_role.jenkins_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "ssm" {
+  role       = aws_iam_role.jenkins_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "jenkins_profile" {
+  name = "${var.role_name}-instance-profile"
+  role = aws_iam_role.jenkins_role.name
+}
+```
+
+### ✅ `terraform/iam/variables.tf`
+
+```hcl
+variable "role_name" {
+  description = "IAM role name for Jenkins EC2 instance"
+  type        = string
+}
+```
+
+### ✅ `terraform/iam/outputs.tf`
+
+```hcl
+output "iam_role_name" {
+  value = aws_iam_role.jenkins_role.name
+}
+
+output "iam_instance_profile_name" {
+  value = aws_iam_instance_profile.jenkins_profile.name
+}
+```
+
+### ✅ Usage
+
+The module is called from the root `main.tf` using:
+
+```hcl
+module "iam" {
+  source    = "./iam"
+  role_name = "jenkins-eks-role"
+}
+```
+
+### ✅ Root `terraform/outputs.tf` (optional)
+
+```hcl
+output "iam_instance_profile_name" {
+  value = module.iam.iam_instance_profile_name
+}
+```
+
+After configuring, simply run:
+
+```bash
+cd terraform
+terraform init
+terraform apply
+```
+
+## 🔧 **Task 7: Connect kubectl to EKS Cluster and Verify Access**
 
 ### 🎯 Objective
 
@@ -611,7 +740,7 @@ kubectl cluster-info
 ```
 ![cluster info](./Images/6.cluster_info.png)
 
-## Task 7: Automate Helm Deployment with Jenkins Pipeline (CI/CD)
+## Task 8: Automate Helm Deployment with Jenkins Pipeline (CI/CD)
 
 ### 🎯 **Goal:**
 
@@ -729,7 +858,7 @@ Set Jenkins to automatically detect new commits in Git repository:
 
     Enter the URL for your Jenkins Git plugin:
 
-http://44.203.206.24:8080/github-webhook/
+http://3.238.161.7:8080/github-webhook/
 
     Select Push events.
 
@@ -763,14 +892,15 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION = 'us-east-1'
-        IMAGE_NAME = 'holuphilix/my-webapp:latest'
-        HELM_BIN = '/usr/local/bin/helm'
-        KUBECONFIG = '/home/ec2-user/.kube/config'
+        AWS_REGION       = 'us-east-1'
+        IMAGE_NAME       = 'holuphilix/my-webapp:latest'
+        HELM_BIN         = '/usr/local/bin/helm'
+        KUBECONFIG       = '/home/ec2-user/.kube/config'
+        EKS_CLUSTER_NAME = 'helm-eks-cluster'
     }
 
     triggers {
-        githubPush() // Trigger the pipeline on GitHub push
+        githubPush()
     }
 
     stages {
@@ -783,7 +913,7 @@ pipeline {
         stage('Build & Push Docker Image') {
             steps {
                 withCredentials([usernamePassword(
-                    credentialsId: 'docker-cred', // Docker Hub credentials
+                    credentialsId: 'docker-cred',
                     usernameVariable: 'DOCKER_USERNAME',
                     passwordVariable: 'DOCKER_PASSWORD'
                 )]) {
@@ -794,28 +924,37 @@ pipeline {
                         echo "🔐 Logging into Docker Hub..."
                         echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
 
-                        echo "📤 Pushing image to Docker Hub..."
+                        echo "📤 Pushing Docker image..."
                         docker push $IMAGE_NAME
+
+                        echo "🧹 Cleaning up local Docker image..."
+                        docker rmi $IMAGE_NAME || true
                     '''
                 }
             }
         }
 
         stage('Deploy to EKS with Helm') {
+            when {
+                anyOf {
+                    branch 'main'
+                    branch 'develop'
+                }
+            }
             steps {
                 withCredentials([usernamePassword(
-                    credentialsId: 'aws-cred', // AWS IAM programmatic credentials
+                    credentialsId: 'aws-cred',
                     usernameVariable: 'AWS_ACCESS_KEY_ID',
                     passwordVariable: 'AWS_SECRET_ACCESS_KEY'
                 )]) {
                     sh '''
-                        echo "⚙️ Configuring AWS CLI for EKS..."
+                        echo "⚙️ Configuring AWS CLI..."
                         export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
                         export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
                         export AWS_DEFAULT_REGION=$AWS_REGION
 
                         echo "📡 Updating kubeconfig for EKS cluster..."
-                        aws eks update-kubeconfig --region $AWS_REGION --name helm-eks-cluster
+                        aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME --kubeconfig $KUBECONFIG
 
                         echo "🚀 Deploying to EKS with Helm..."
                         $HELM_BIN upgrade --install my-webapp ./webapp --namespace default
@@ -830,11 +969,18 @@ pipeline {
             echo '✅ Deployment succeeded!'
         }
         failure {
-            echo '❌ Deployment failed. Check logs above.'
+            echo '❌ Deployment failed. Please check logs above.'
         }
     }
 }
 ```
+
+#### Jenkins login portal
+
+```bash
+http://98.81.72.107:8080
+```
+
 ### Step 7: Test a deployment (e.g., NGINX):
 
 ```bash
@@ -843,12 +989,16 @@ kubectl expose deployment nginx --port=80 --type=LoadBalancer
 ```
 ![create deployment nginx](./Images/9.test_ngnix.png)
 
-### Step 8: kubectl get pods
+### Step 8: kubectl get pods on Ec2 Instance
 
 ```bash
 kubectl get pods
 ```
-![Kubectl get pods](./Images/10.kubectl_pods.png)
+
+**Screenshot:** Test on Ec2 Instance 
+
+![Kubectl get pods](./Images/12.Ec2_kubectl_pods.png)
+
 
 ### 🌐 Step 9: Trigger Build and Verify
 

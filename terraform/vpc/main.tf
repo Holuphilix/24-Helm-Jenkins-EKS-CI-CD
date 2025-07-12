@@ -1,3 +1,5 @@
+data "aws_availability_zones" "available" {}
+
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
@@ -16,25 +18,25 @@ resource "aws_internet_gateway" "gw" {
   }
 }
 
-resource "aws_subnet" "public_az1" {
+resource "aws_subnet" "public1" {
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_az1_cidr
-  availability_zone       = data.aws_availability_zones.available.names[0]
+  cidr_block              = var.public_subnet_cidr_1
+  availability_zone       = var.availability_zone_1
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.vpc_name}-public-subnet-az1"
+    Name = "${var.vpc_name}-public-subnet-1"
   }
 }
 
-resource "aws_subnet" "public_az2" {
+resource "aws_subnet" "public2" {
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_az2_cidr
-  availability_zone       = data.aws_availability_zones.available.names[1]
+  cidr_block              = var.public_subnet_cidr_2
+  availability_zone       = var.availability_zone_2
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.vpc_name}-public-subnet-az2"
+    Name = "${var.vpc_name}-public-subnet-2"
   }
 }
 
@@ -52,14 +54,12 @@ resource "aws_route" "default_route" {
   gateway_id             = aws_internet_gateway.gw.id
 }
 
-resource "aws_route_table_association" "public_assoc_az1" {
-  subnet_id      = aws_subnet.public_az1.id
+resource "aws_route_table_association" "public_assoc_1" {
+  subnet_id      = aws_subnet.public1.id
   route_table_id = aws_route_table.public.id
 }
 
-resource "aws_route_table_association" "public_assoc_az2" {
-  subnet_id      = aws_subnet.public_az2.id
+resource "aws_route_table_association" "public_assoc_2" {
+  subnet_id      = aws_subnet.public2.id
   route_table_id = aws_route_table.public.id
 }
-
-data "aws_availability_zones" "available" {}

@@ -17,7 +17,7 @@ module "iam" {
 module "ec2_jenkins" {
   source         = "./ec2"
   ami_id         = "ami-05ffe3c48a9991133"
-  instance_type  = "t3.micro"
+  instance_type  = "t3.medium"
   key_pair_name  = "helm_keypair"
   vpc_id         = module.vpc.vpc_id
   subnet_id      = module.vpc.public_subnet_1_id  # 👈 Make sure this output exists in vpc/outputs.tf

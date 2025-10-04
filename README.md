@@ -1,4 +1,4 @@
-# 🚀 Integrating Helm with CI/CD using Jenkins and EKS
+# 🚀 Mini Project: Integrating Helm with CI/CD using Jenkins and EKS
 
 ## Introduction
 
@@ -1216,6 +1216,7 @@ This project showcases the seamless integration of Terraform, Jenkins, and Helm 
 
 ## Author
 **Philip Oluwaseyi Oludolamu**
+
 DevOps Engineer 
 
 * ✉️ Email: [oluphilix@gmail.com](mailto:oluphilix@gmail.com)
